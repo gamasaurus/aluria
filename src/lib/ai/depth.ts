@@ -1,4 +1,4 @@
-import type { DepthScore, KnowledgeBase, Stage, DepthLevel, AIExtracted, KnowledgeDepth, ActorsDepth, ProcessDepth, FunctionalDepth, RulesDepth } from '@/lib/types'
+import type { DepthScore, KnowledgeBase, Stage, DepthLevel, AIExtracted, KnowledgeDepth, ActorsDepth, ProcessDepth, FunctionalDepth, RulesDepth, KnowledgeBaseV2, DepthBreakdown, DepthBreakdownSection } from '@/lib/types'
 
 export const DEFAULT_DEPTH_SCORE: DepthScore = {
   clarity: 0,
@@ -269,20 +269,18 @@ export function computeProgress(kb: KnowledgeBase): number {
 
 // ─── KB V2 Depth Functions ────────────────────────────────────────────────────
 
-import type { KnowledgeBaseV2, DepthBreakdown, DepthBreakdownSection } from '@/lib/types'
-
 /**
  * Compute the weighted Depth Score V2 (0–100).
  * Formula: (use_cases.normal × 5) + (use_cases.edge × 8) + (process_flow × 3)
  *        + (data_model.entities × 6) + (functional_requirements × 4), capped at 100.
  */
 export function calculateDepthV2(kb: KnowledgeBaseV2): number {
-  const score =
-    (kb.use_cases.normal.length * 5) +
-    (kb.use_cases.edge.length * 8) +
-    (kb.process_flow.length * 3) +
-    (kb.data_model.entities.length * 6) +
-    (kb.functional_requirements.length * 4)
+  const ucNormal = kb?.use_cases?.normal?.length ?? 0
+  const ucEdge = kb?.use_cases?.edge?.length ?? 0
+  const pf = kb?.process_flow?.length ?? 0
+  const dm = kb?.data_model?.entities?.length ?? 0
+  const fr = kb?.functional_requirements?.length ?? 0
+  const score = (ucNormal * 5) + (ucEdge * 8) + (pf * 3) + (dm * 6) + (fr * 4)
   return Math.min(score, 100)
 }
 
@@ -290,31 +288,18 @@ export function calculateDepthV2(kb: KnowledgeBaseV2): number {
  * Return per-section depth breakdown for the V2 KB.
  */
 export function getDepthBreakdown(kb: KnowledgeBaseV2): DepthBreakdown {
-  const ucNormal: DepthBreakdownSection = {
-    score: Math.min(kb.use_cases.normal.length * 5, 20),
-    max: 20,
-    items: kb.use_cases.normal.length,
-  }
-  const ucEdge: DepthBreakdownSection = {
-    score: Math.min(kb.use_cases.edge.length * 8, 24),
-    max: 24,
-    items: kb.use_cases.edge.length,
-  }
-  const pf: DepthBreakdownSection = {
-    score: Math.min(kb.process_flow.length * 3, 15),
-    max: 15,
-    items: kb.process_flow.length,
-  }
-  const dm: DepthBreakdownSection = {
-    score: Math.min(kb.data_model.entities.length * 6, 18),
-    max: 18,
-    items: kb.data_model.entities.length,
-  }
-  const fr: DepthBreakdownSection = {
-    score: Math.min(kb.functional_requirements.length * 4, 24),
-    max: 24,
-    items: kb.functional_requirements.length,
-  }
+  const ucNormalLen = kb?.use_cases?.normal?.length ?? 0
+  const ucEdgeLen = kb?.use_cases?.edge?.length ?? 0
+  const pfLen = kb?.process_flow?.length ?? 0
+  const dmLen = kb?.data_model?.entities?.length ?? 0
+  const frLen = kb?.functional_requirements?.length ?? 0
+
+  const ucNormal: DepthBreakdownSection = { score: Math.min(ucNormalLen * 5, 20), max: 20, items: ucNormalLen }
+  const ucEdge: DepthBreakdownSection = { score: Math.min(ucEdgeLen * 8, 24), max: 24, items: ucEdgeLen }
+  const pf: DepthBreakdownSection = { score: Math.min(pfLen * 3, 15), max: 15, items: pfLen }
+  const dm: DepthBreakdownSection = { score: Math.min(dmLen * 6, 18), max: 18, items: dmLen }
+  const fr: DepthBreakdownSection = { score: Math.min(frLen * 4, 24), max: 24, items: frLen }
+
   return {
     use_cases_normal: ucNormal,
     use_cases_edge: ucEdge,
@@ -340,18 +325,23 @@ export function getDepthStatus(score: number): 'Shallow' | 'Moderate' | 'Ready' 
  *          functional_requirements=0.15, data_model=0.15
  */
 export function computeProgressV2(kb: KnowledgeBaseV2): number {
-  const businessScore = kb.business.problem.length > 5 ? 1 : 0
-  const actorsScore = kb.actors.length >= 1 ? Math.min(kb.actors.length / 2, 1) : 0
+  // Guard against partially-migrated or malformed KB objects
+  const business = kb?.business ?? { problem: '', objectives: [], success_metrics: [], stakeholders: [] }
+  const actors = kb?.actors ?? []
+  const useCasesNormal = kb?.use_cases?.normal ?? []
+  const useCasesEdge = kb?.use_cases?.edge ?? []
+  const processFlow = kb?.process_flow ?? []
+  const functionalReqs = kb?.functional_requirements ?? []
+  const entities = kb?.data_model?.entities ?? []
+
+  const businessScore = (business.problem?.length ?? 0) > 5 ? 1 : 0
+  const actorsScore = actors.length >= 1 ? Math.min(actors.length / 2, 1) : 0
   const useCasesScore =
-    (kb.use_cases.normal.length >= 1 ? Math.min(kb.use_cases.normal.length / 2, 0.5) : 0) +
-    (kb.use_cases.edge.length >= 1 ? 0.5 : 0)
-  const processScore = kb.process_flow.length >= 1 ? Math.min(kb.process_flow.length / 3, 1) : 0
-  const frScore = kb.functional_requirements.length >= 1
-    ? Math.min(kb.functional_requirements.length / 3, 1)
-    : 0
-  const dmScore = kb.data_model.entities.length >= 1
-    ? Math.min(kb.data_model.entities.length / 2, 1)
-    : 0
+    (useCasesNormal.length >= 1 ? Math.min(useCasesNormal.length / 2, 0.5) : 0) +
+    (useCasesEdge.length >= 1 ? 0.5 : 0)
+  const processScore = processFlow.length >= 1 ? Math.min(processFlow.length / 3, 1) : 0
+  const frScore = functionalReqs.length >= 1 ? Math.min(functionalReqs.length / 3, 1) : 0
+  const dmScore = entities.length >= 1 ? Math.min(entities.length / 2, 1) : 0
 
   return (
     businessScore * 0.15 +

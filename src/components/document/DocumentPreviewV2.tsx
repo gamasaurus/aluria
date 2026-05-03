@@ -279,6 +279,19 @@ interface Props {
 // ─── Main component ──────────────────────────────────────────────────────────
 
 export default function DocumentPreviewV2({ kb, projectName, onKBUpdate, onBackToChat, onDownload }: Props) {
+  // Normalize KB to prevent crashes from partially-migrated objects
+  kb = {
+    business: { problem: kb?.business?.problem ?? '', objectives: kb?.business?.objectives ?? [], success_metrics: kb?.business?.success_metrics ?? [], stakeholders: kb?.business?.stakeholders ?? [] },
+    actors: kb?.actors ?? [],
+    use_cases: { normal: kb?.use_cases?.normal ?? [], edge: kb?.use_cases?.edge ?? [] },
+    process_flow: kb?.process_flow ?? [],
+    functional_requirements: kb?.functional_requirements ?? [],
+    business_rules: kb?.business_rules ?? [],
+    data_model: { entities: kb?.data_model?.entities ?? [], relationships: kb?.data_model?.relationships ?? [] },
+    system_design: { architecture: { frontend: kb?.system_design?.architecture?.frontend ?? '', backend: kb?.system_design?.architecture?.backend ?? '', database: kb?.system_design?.architecture?.database ?? '', ai_layer: kb?.system_design?.architecture?.ai_layer ?? '' }, api_endpoints: kb?.system_design?.api_endpoints ?? [] },
+    ux: { user_flow: kb?.ux?.user_flow ?? [], screens: kb?.ux?.screens ?? [] },
+    completion: { score: kb?.completion?.score ?? 0, depth: kb?.completion?.depth ?? 0, prompt_version: kb?.completion?.prompt_version ?? 2 },
+  }
   const date = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" })
   const completion = Math.round(computeProgressV2(kb) * 100)
   const depth = calculateDepthV2(kb)
@@ -452,7 +465,7 @@ export default function DocumentPreviewV2({ kb, projectName, onKBUpdate, onBackT
               cursor: "pointer",
             }}
           >
-            Download PSB
+            ↓ PDF
           </button>
         </div>
       </div>
@@ -720,11 +733,11 @@ export default function DocumentPreviewV2({ kb, projectName, onKBUpdate, onBackT
                   <p style={{ fontSize: 13, color: "var(--text-secondary)", margin: "0 0 8px 0", lineHeight: 1.7 }}>
                     {req.description}
                   </p>
-                  {req.acceptance_criteria.length > 0 && (
+                  {(req.acceptance_criteria ?? []).length > 0 && (
                     <>
                       <SubLabel>ACCEPTANCE CRITERIA</SubLabel>
                       <ul style={{ margin: 0, paddingLeft: 18, fontSize: 13, color: "var(--text-secondary)", lineHeight: 1.7 }}>
-                        {req.acceptance_criteria.map((ac, j) => <li key={j}>{ac}</li>)}
+                        {(req.acceptance_criteria ?? []).map((ac, j) => <li key={j}>{ac}</li>)}
                       </ul>
                     </>
                   )}

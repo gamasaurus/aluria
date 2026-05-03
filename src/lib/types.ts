@@ -79,6 +79,8 @@ export interface ChatResponse {
   kb_version?: 1 | 2
   guard_triggered?: boolean
   depth_breakdown?: DepthBreakdown
+  recommendations?: string[]
+  diagram_intent?: { diagram_type: string; confidence: number; reason: string } | null
 }
 
 export interface Project {

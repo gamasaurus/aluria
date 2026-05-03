@@ -12,7 +12,7 @@ import {
   computeProgressV2,
   getDepthBreakdown,
 } from '@/lib/ai/depth'
-import { buildSystemPrompt, buildUserPrompt, buildSystemPromptV2, buildUserPromptV2, retryAI, estimateTokenUsage } from '@/lib/ai/prompt'
+import { buildSystemPrompt, buildUserPrompt, buildSystemPromptV2, buildUserPromptV2, type ProjectType } from '@/lib/ai/prompt'
 import {
   parseAIResponse,
   applyExtraction,
@@ -20,7 +20,6 @@ import {
   hasValidExtraction,
   createEmptyKBV2,
   applyExtractionV2,
-  migrateKBV1toV2,
 } from '@/lib/ai/extract'
 import { enforceQuestionRules, checkAntiShallowGuard } from '@/lib/ai/guard'
 import { isTooShort, clarifyResponse } from '@/lib/ai/validate'
@@ -33,6 +32,22 @@ import { FEATURES } from '@/lib/features'
 
 function useAI(): boolean {
   return FEATURES.AI_ENABLED
+}
+
+// ─── Local diagram intent detection (keyword-based, zero latency) ─────────────
+
+function detectDiagramIntentLocal(message: string): { diagram_type: string; confidence: number; reason: string } | null {
+  const m = message.toLowerCase()
+  if (/\b(flow|process|step by step|alur|workflow|how does it work|walkthrough)\b/.test(m)) {
+    return { diagram_type: 'bpmn', confidence: 0.85, reason: 'Process/flow keywords detected' }
+  }
+  if (/\b(interaction|sequence|request.?response|between user and system|uml)\b/.test(m)) {
+    return { diagram_type: 'uml_sequence', confidence: 0.85, reason: 'Sequence/interaction keywords detected' }
+  }
+  if (/\b(database|entity|table|relationship|schema|data structure|erd)\b/.test(m)) {
+    return { diagram_type: 'erd', confidence: 0.85, reason: 'Data model keywords detected' }
+  }
+  return null
 }
 
 // ─── AI Providers ─────────────────────────────────────────────────────────────
@@ -100,56 +115,6 @@ async function callAI(opts: { system: string; user: string }): Promise<string | 
   return null
 }
 
-/**
- * Stream V2 AI response via OpenAI streaming API.
- * Returns a ReadableStream of SSE chunks, or null if streaming is unavailable.
- * Each chunk is a JSON string: { token: string } or { done: true, full: string }
- */
-async function callOpenAIStream(opts: { system: string; user: string }): Promise<ReadableStream<Uint8Array> | null> {
-  const apiKey = process.env.OPENAI_API_KEY
-  if (!apiKey) return null
-
-  const openai = new OpenAI({ apiKey })
-  const encoder = new TextEncoder()
-
-  const stream = new ReadableStream<Uint8Array>({
-    async start(controller) {
-      try {
-        const completion = await openai.chat.completions.create({
-          model: 'gpt-4o',
-          messages: [
-            { role: 'system', content: opts.system },
-            { role: 'user', content: opts.user },
-          ],
-          temperature: 0.3,
-          max_tokens: 600,
-          stream: true,
-        })
-
-        let fullText = ''
-        for await (const chunk of completion) {
-          const token = chunk.choices[0]?.delta?.content ?? ''
-          if (token) {
-            fullText += token
-            const data = `data: ${JSON.stringify({ token })}\n\n`
-            controller.enqueue(encoder.encode(data))
-          }
-        }
-        // Send final complete message
-        const done = `data: ${JSON.stringify({ done: true, full: fullText })}\n\n`
-        controller.enqueue(encoder.encode(done))
-        controller.close()
-      } catch (err) {
-        const errData = `data: ${JSON.stringify({ error: String(err) })}\n\n`
-        controller.enqueue(encoder.encode(errData))
-        controller.close()
-      }
-    },
-  })
-
-  return stream
-}
-
 export async function POST(request: NextRequest) {
   try {
     const { project_id, message } = await request.json()
@@ -210,8 +175,6 @@ export async function POST(request: NextRequest) {
 
       // ── V2 GUIDED MODE ──────────────────────────────────────────────────────
       if (!useAI()) {
-        console.log('[chat] V2 Guided mode active (USE_AI=false)')
-
         const guardResult = checkAntiShallowGuard(kbV2, resolveStage(kb))
         if (guardResult.blocked) {
           const forcedQ = enforceQuestionRules(guardResult.forced_question ?? 'Please provide more details.')
@@ -293,7 +256,9 @@ export async function POST(request: NextRequest) {
 
       // Route to correct prompt builder based on prompt_version (default 2)
       const promptVersion = kbV2.completion.prompt_version ?? 2
-      const systemPromptV2 = promptVersion === 2 ? buildSystemPromptV2() : buildSystemPromptV2()
+      // Extract project type stored during project creation
+      const projectType = ((kbV2 as unknown as Record<string, unknown>)._project_type ?? 'new_system') as ProjectType
+      const systemPromptV2 = promptVersion === 2 ? buildSystemPromptV2(projectType) : buildSystemPromptV2(projectType)
       const userPromptV2 = buildUserPromptV2({
         stage: stageV2,
         kb: kbV2,
@@ -350,6 +315,9 @@ export async function POST(request: NextRequest) {
 
           await supabase.from('messages').insert({ project_id, role: 'ai', content: nextQuestion })
 
+          // Detect diagram intent from user message (keyword-based, no extra AI call)
+          const diagramIntent = detectDiagramIntentLocal(message)
+
           return NextResponse.json({
             insight: parsed.reasoning ?? '',
             depth_level: 'partial' as DepthLevel,
@@ -361,6 +329,8 @@ export async function POST(request: NextRequest) {
             guard_triggered: false,
             kb_version: 2 as const,
             depth_breakdown: getDepthBreakdown(updatedKBV2),
+            recommendations: parsed.recommendations ?? [],
+            diagram_intent: diagramIntent,
           })
         } catch (err) {
           console.error('[chat] V2 AI response parse failed, falling back to guided mode:', err)
@@ -403,8 +373,6 @@ export async function POST(request: NextRequest) {
 
     // ── GUIDED MODE (USE_AI=false) ────────────────────────────────────────────
     if (!useAI()) {
-      console.log('[chat] Guided mode active (USE_AI=false)')
-
       const currentStage = resolveStage(kb)
 
       // At complete stage — don't re-extract, just confirm and return existing KB

@@ -14,8 +14,7 @@ export function enforceQuestionRules(raw: string): string {
 
 // ─── Anti-Shallow Guard (V2) ──────────────────────────────────────────────────
 
-import type { KnowledgeBaseV2, AntiShallowGuardResult } from '@/lib/types'
-import type { Stage } from '@/lib/types'
+import type { KnowledgeBaseV2, AntiShallowGuardResult, Stage } from '@/lib/types'
 
 /**
  * Check all four Anti-Shallow Guard conditions in order.

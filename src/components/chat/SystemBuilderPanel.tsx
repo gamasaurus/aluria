@@ -274,14 +274,14 @@ function ActorCard({
   onUpdate: (updated: ActorV2) => void
 }) {
   function updatePermission(i: number, val: string) {
-    const next = [...actor.permissions]
+    const next = [...(actor.permissions ?? [])]
     if (val.trim() === '') next.splice(i, 1)
     else next[i] = val.trim()
     onUpdate({ ...actor, permissions: next })
   }
 
   function updateGoal(i: number, val: string) {
-    const next = [...actor.goals]
+    const next = [...(actor.goals ?? [])]
     if (val.trim() === '') next.splice(i, 1)
     else next[i] = val.trim()
     onUpdate({ ...actor, goals: next })
@@ -315,13 +315,13 @@ function ActorCard({
         </div>
       </div>
 
-      <div style={{ marginBottom: 8 }}>
+        <div style={{ marginBottom: 8 }}>
         <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 4 }}>PERMISSIONS</div>
-        {actor.permissions.length === 0 ? (
+        {(actor.permissions ?? []).length === 0 ? (
           <div style={{ fontSize: 12, color: 'var(--text-subtle)', padding: '4px 10px' }}>(none)</div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-            {actor.permissions.map((p, i) => (
+            {(actor.permissions ?? []).map((p, i) => (
               <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span style={{ color: 'var(--text-muted)', fontSize: 12, minWidth: 12 }}>•</span>
                 <div style={{ flex: 1 }}>
@@ -335,11 +335,11 @@ function ActorCard({
 
       <div>
         <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 4 }}>GOALS</div>
-        {actor.goals.length === 0 ? (
+        {(actor.goals ?? []).length === 0 ? (
           <div style={{ fontSize: 12, color: 'var(--text-subtle)', padding: '4px 10px' }}>(none)</div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-            {actor.goals.map((g, i) => (
+            {(actor.goals ?? []).map((g, i) => (
               <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                 <span style={{ color: 'var(--text-muted)', fontSize: 12, minWidth: 12 }}>→</span>
                 <div style={{ flex: 1 }}>
@@ -583,7 +583,7 @@ function RequirementCard({
   onUpdate: (updated: FunctionalRequirement) => void
 }) {
   function updateCriteria(i: number, val: string) {
-    const next = [...req.acceptance_criteria]
+    const next = [...(req.acceptance_criteria ?? [])]
     if (val.trim() === '') next.splice(i, 1)
     else next[i] = val.trim()
     onUpdate({ ...req, acceptance_criteria: next })
@@ -618,13 +618,13 @@ function RequirementCard({
       </div>
       <div>
         <div style={{ fontSize: 11, fontWeight: 700, color: 'var(--text-muted)', marginBottom: 4 }}>
-          ACCEPTANCE CRITERIA ({req.acceptance_criteria.length})
+          ACCEPTANCE CRITERIA ({(req.acceptance_criteria ?? []).length})
         </div>
-        {req.acceptance_criteria.length === 0 ? (
+        {(req.acceptance_criteria ?? []).length === 0 ? (
           <div style={{ fontSize: 12, color: 'var(--text-subtle)', padding: '4px 10px' }}>(none)</div>
         ) : (
           <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
-            {req.acceptance_criteria.map((c, i) => (
+            {(req.acceptance_criteria ?? []).map((c, i) => (
               <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
                 <span style={{ color: 'var(--success, #16A34A)', fontSize: 12, paddingTop: 6, flexShrink: 0 }}>✓</span>
                 <div style={{ flex: 1 }}>
@@ -740,6 +740,30 @@ function SBSection({
 // ─── 9. Main SystemBuilderPanel ───────────────────────────────────────────────
 
 export default function SystemBuilderPanel({ kb, onKBUpdate, activeSection }: SystemBuilderPanelProps) {
+  // Normalize KB to prevent crashes from partially-migrated or malformed objects
+  const safeBusiness = kb?.business ?? { problem: '', objectives: [], success_metrics: [], stakeholders: [] }
+  const safeActors = kb?.actors ?? []
+  const safeUseCases = kb?.use_cases ?? { normal: [], edge: [] }
+  const safeProcessFlow = kb?.process_flow ?? []
+  const safeFunctionalReqs = kb?.functional_requirements ?? []
+  const safeDataModel = kb?.data_model ?? { entities: [], relationships: [] }
+  const safeSystemDesign = kb?.system_design ?? { architecture: { frontend: '', backend: '', database: '', ai_layer: '' }, api_endpoints: [] }
+
+  // Rebuild a safe kb reference for all child components
+  const safeKB: KnowledgeBaseV2 = {
+    ...kb,
+    business: safeBusiness,
+    actors: safeActors,
+    use_cases: safeUseCases,
+    process_flow: safeProcessFlow,
+    functional_requirements: safeFunctionalReqs,
+    business_rules: kb?.business_rules ?? [],
+    data_model: safeDataModel,
+    system_design: safeSystemDesign,
+    ux: kb?.ux ?? { user_flow: [], screens: [] },
+    completion: kb?.completion ?? { score: 0, depth: 0, prompt_version: 2 },
+  }
+  kb = safeKB
   // Track active nav section based on scroll or prop
   const [navSection, setNavSection] = useState<string>(activeSection ?? 'business')
   const [saving, setSaving] = useState(false)

@@ -1,7 +1,50 @@
-import { KnowledgeBase } from '@/lib/types'
-import { calculateDepth, computeProgress } from '@/lib/ai/depth'
-import type { KnowledgeBaseV2 } from '@/lib/types'
-import { calculateDepthV2, computeProgressV2 } from '@/lib/ai/depth'
+import type { KnowledgeBase, KnowledgeBaseV2 } from '@/lib/types'
+import { calculateDepth, computeProgress, calculateDepthV2, computeProgressV2 } from '@/lib/ai/depth'
+
+// ─── Safe KB V2 accessor ──────────────────────────────────────────────────────
+// Ensures all nested fields exist before any function accesses them.
+// Prevents crashes when KB is partially migrated or malformed.
+
+function safe(kb: KnowledgeBaseV2): KnowledgeBaseV2 {
+  return {
+    business: {
+      problem: kb?.business?.problem ?? '',
+      objectives: kb?.business?.objectives ?? [],
+      success_metrics: kb?.business?.success_metrics ?? [],
+      stakeholders: kb?.business?.stakeholders ?? [],
+    },
+    actors: kb?.actors ?? [],
+    use_cases: {
+      normal: kb?.use_cases?.normal ?? [],
+      edge: kb?.use_cases?.edge ?? [],
+    },
+    process_flow: kb?.process_flow ?? [],
+    functional_requirements: kb?.functional_requirements ?? [],
+    business_rules: kb?.business_rules ?? [],
+    data_model: {
+      entities: kb?.data_model?.entities ?? [],
+      relationships: kb?.data_model?.relationships ?? [],
+    },
+    system_design: {
+      architecture: {
+        frontend: kb?.system_design?.architecture?.frontend ?? '',
+        backend: kb?.system_design?.architecture?.backend ?? '',
+        database: kb?.system_design?.architecture?.database ?? '',
+        ai_layer: kb?.system_design?.architecture?.ai_layer ?? '',
+      },
+      api_endpoints: kb?.system_design?.api_endpoints ?? [],
+    },
+    ux: {
+      user_flow: kb?.ux?.user_flow ?? [],
+      screens: kb?.ux?.screens ?? [],
+    },
+    completion: {
+      score: kb?.completion?.score ?? 0,
+      depth: kb?.completion?.depth ?? 0,
+      prompt_version: kb?.completion?.prompt_version ?? 2,
+    },
+  }
+}
 
 // ─── BPMN 2.0 XML ─────────────────────────────────────────────────────────────
 
@@ -279,6 +322,7 @@ function escapeMermaid(text: string): string {
  * Returns empty string if process_flow is empty.
  */
 export function generateBPMNFromV2(kb: KnowledgeBaseV2): string {
+  kb = safe(kb)
   if (kb.process_flow.length === 0) return ''
 
   // Detect decision rules
@@ -334,6 +378,7 @@ export function generateBPMNFromV2(kb: KnowledgeBaseV2): string {
  * Returns empty string if use_cases.normal is empty.
  */
 export function generateUMLSequence(kb: KnowledgeBaseV2): string {
+  kb = safe(kb)
   if (kb.use_cases.normal.length === 0) return ''
 
   let diagram = 'sequenceDiagram\n'
@@ -360,6 +405,7 @@ export function generateUMLSequence(kb: KnowledgeBaseV2): string {
  * Returns empty string if data_model.entities is empty.
  */
 export function generateERD(kb: KnowledgeBaseV2): string {
+  kb = safe(kb)
   if (kb.data_model.entities.length === 0) return ''
 
   let diagram = 'erDiagram\n'
@@ -391,6 +437,7 @@ export function generateERD(kb: KnowledgeBaseV2): string {
  * Pure function — no side effects.
  */
 export function generatePSB(kb: KnowledgeBaseV2, projectName: string): string {
+  kb = safe(kb)
   const date = new Date().toLocaleDateString('en-US', {
     year: 'numeric', month: 'long', day: 'numeric',
   })

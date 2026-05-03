@@ -8,9 +8,10 @@
  * - KB updates, scores, and review mode trigger identically to AI mode.
  */
 
-import type { KnowledgeBase, Stage, DepthLevel, DepthScore, Actor } from '@/lib/types'
-import { applyExtraction } from '@/lib/ai/extract'
-import { resolveStage, calculateDepth, computeProgress, DEFAULT_DEPTH_SCORE } from '@/lib/ai/depth'
+import type { KnowledgeBase, KnowledgeBaseV2, Stage, DepthLevel, DepthScore, Actor, ProcessFlowStep, FunctionalRequirement, BusinessRule, ActorV2, NormalUseCase, EdgeUseCase } from '@/lib/types'
+import { applyExtraction, createEmptyKBV2, applyExtractionV2 } from '@/lib/ai/extract'
+import { resolveStage, calculateDepth, computeProgress, DEFAULT_DEPTH_SCORE, calculateDepthV2, computeProgressV2 } from '@/lib/ai/depth'
+import { checkAntiShallowGuard } from '@/lib/ai/guard'
 
 // ─── Stage questions ──────────────────────────────────────────────────────────
 
@@ -240,14 +241,6 @@ export function guidedModeHandler(message: string, kb: KnowledgeBase): GuidedRes
 }
 
 // ─── Guided Mode V2 ───────────────────────────────────────────────────────────
-
-import type {
-  KnowledgeBaseV2, ProcessFlowStep, FunctionalRequirement, BusinessRule,
-  ActorV2, NormalUseCase, EdgeUseCase,
-} from '@/lib/types'
-import { createEmptyKBV2, applyExtractionV2 } from '@/lib/ai/extract'
-import { calculateDepthV2, computeProgressV2 } from '@/lib/ai/depth'
-import { checkAntiShallowGuard } from '@/lib/ai/guard'
 
 export interface GuidedResultV2 {
   next_question: string
